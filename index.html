@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Reaction Time</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #fde8ef;
+            --card: #fff7fa;
+            --ink: #6b3a4d;
+            --soft: #b88a9b;
+            --pink: #f4a6c0;
+            --deep: #e0679a;
+            --line: #f9d3e0;
+            box-sizing: border-box;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        html {
+            scroll-padding-top: env(safe-area-inset-top, 0px)
+        }
+
+        * {
+            box-sizing: border-box
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: radial-gradient(circle at 20% 10%, #fff2f6 0, var(--bg) 55%);
+            color: var(--ink);
+            font-family: 'Quicksand', 'Trebuchet MS', sans-serif;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .game {
+            width: 100%;
+            max-width: 380px;
+            padding: 36px 28px 28px;
+            text-align: center;
+            background: var(--card);
+            border-radius: 36px;
+            box-shadow: 0 20px 50px rgba(224, 103, 154, .18);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+            letter-spacing: .12em;
+            color: var(--soft)
+        }
+
+        .dots {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 16px 0 30px
+        }
+
+        .dots i {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--line);
+            transition: background .3s, transform .3s
+        }
+
+        .dots i.current {
+            background: var(--pink);
+            transform: scale(1.4)
+        }
+
+        .dots i.done {
+            background: var(--deep)
+        }
+
+        .label {
+            color: var(--soft);
+            font-size: .95rem
+        }
+
+        .target {
+            font-size: 3.4rem;
+            font-weight: 700;
+            color: var(--deep);
+            line-height: 1.1;
+            margin-bottom: 26px
+        }
+
+        .clock {
+            font-size: 4.6rem;
+            font-weight: 500;
+            line-height: 1;
+            transition: opacity .3s
+        }
+
+        .clock.hidden {
+            opacity: .12
+        }
+
+        .hint {
+            min-height: 1.5em;
+            margin: 12px 0 26px;
+            color: var(--soft);
+            font-size: .95rem
+        }
+
+        button {
+            font: inherit;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #fff;
+            background: var(--deep);
+            border: 0;
+            border-radius: 999px;
+            padding: 14px 48px;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(224, 103, 154, .35);
+            transition: transform .1s, box-shadow .1s;
+        }
+
+        button:active {
+            transform: scale(.96);
+            box-shadow: 0 3px 8px rgba(224, 103, 154, .35)
+        }
+
+        button:focus-visible {
+            outline: 3px solid var(--ink);
+            outline-offset: 3px
+        }
+
+        .result {
+            min-height: 84px;
+            margin-top: 24px
+        }
+
+        .diff {
+            font-size: 1.7rem;
+            font-weight: 700
+        }
+
+        .msg {
+            margin-top: 2px;
+            color: var(--soft)
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 28px;
+            margin-top: 8px;
+            font-size: .9rem;
+            color: var(--soft)
+        }
+
+        .stats b {
+            color: var(--ink);
+            font-weight: 700
+        }
+    </style>
+</head>
+
+<body>
+    <main class="game">
+        <h1>reaction time</h1>
+        <div class="dots" id="dots" aria-label="Round progress"><i></i><i></i><i></i></div>
+
+        <div class="label">stop at</div>
+        <div class="target" id="target">5.00</div>
+
+        <div class="clock" id="clock">0.00</div>
+        <p class="hint" id="hint">The clock fades after 2 seconds.</p>
+
+        <button id="btn">Start</button>
+
+        <div class="result" id="result" aria-live="polite"></div>
+
+        <div class="stats">
+            <span>best miss <b id="best">–</b></span>
+            <span>average <b id="avg">–</b></span>
+        </div>
+    </main>
+
+    <script>
+        (function () {
+            var targetEl = document.getElementById('target'),
+                clockEl = document.getElementById('clock'),
+                btn = document.getElementById('btn'),
+                result = document.getElementById('result'),
+                hint = document.getElementById('hint'),
+                bestEl = document.getElementById('best'),
+                avgEl = document.getElementById('avg'),
+                dots = document.querySelectorAll('#dots i');
+
+            var MAX = 3, target = 5, startTime = 0, raf = null, running = false, over = false;
+            var rounds = 0, best = null, totalMiss = 0;
+
+            function renderDots() {
+                for (var i = 0; i < dots.length; i++) {
+                    dots[i].className = i < rounds ? 'done' : (i === rounds && !over ? 'current' : '');
+                }
+            }
+            function newTarget() {
+                target = 3 + Math.floor(Math.random() * 13) * 0.5;
+                targetEl.textContent = target.toFixed(2);
+            }
+            function tick() {
+                var t = (performance.now() - startTime) / 1000;
+                clockEl.textContent = t.toFixed(2);
+                clockEl.classList.toggle('hidden', t > 2);
+                raf = requestAnimationFrame(tick);
+            }
+            function start() {
+                running = true;
+                result.innerHTML = '';
+                hint.textContent = 'Press stop at ' + target.toFixed(2);
+                btn.textContent = 'Stop';
+                startTime = performance.now();
+                raf = requestAnimationFrame(tick);
+            }
+            function stop() {
+                running = false;
+                cancelAnimationFrame(raf);
+                var t = (performance.now() - startTime) / 1000;
+                clockEl.classList.remove('hidden');
+                clockEl.textContent = t.toFixed(2);
+                var miss = Math.abs(t - target), sign = t >= target ? '+' : '-', msg;
+                if (miss <= 0.01) msg = 'Perfect!';
+                else if (miss <= 0.1) msg = 'So close!';
+                else if (miss <= 0.3) msg = 'Nice timing';
+                else if (miss <= 0.8) msg = 'Not bad';
+                else msg = t < target ? 'Too early' : 'Too late';
+
+                result.innerHTML = '<div class="diff">' + sign + miss.toFixed(2) + 's</div><div class="msg">' + msg + '</div>';
+
+                rounds++; totalMiss += miss;
+                if (best === null || miss < best) best = miss;
+                bestEl.textContent = best.toFixed(2) + 's';
+                avgEl.textContent = (totalMiss / rounds).toFixed(2) + 's';
+
+                if (rounds >= MAX) {
+                    over = true;
+                    hint.textContent = 'Game over. Average miss ' + (totalMiss / rounds).toFixed(2) + 's';
+                    btn.textContent = 'New game';
+                } else {
+                    newTarget();
+                    hint.textContent = 'Round ' + (rounds + 1) + ' of ' + MAX;
+                    btn.textContent = 'Next round';
+                }
+                renderDots();
+            }
+            function resetGame() {
+                rounds = 0; best = null; totalMiss = 0; over = false;
+                bestEl.textContent = '–'; avgEl.textContent = '–';
+                result.innerHTML = ''; clockEl.textContent = '0.00';
+                newTarget();
+                hint.textContent = 'The clock fades after 2 seconds.';
+                btn.textContent = 'Start';
+                renderDots();
+            }
+            function act() {
+                if (running) {stop(); return;}
+                if (over) {resetGame(); return;}
+                start();
+            }
+
+            btn.addEventListener('click', act);
+            document.addEventListener('keydown', function (e) {
+                if (e.code === 'Space') {e.preventDefault(); act();}
+            });
+
+            newTarget();
+            renderDots();
+        })();
+    </script>
+</body>
+
+</html>
